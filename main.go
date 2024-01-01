@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -21,6 +22,7 @@ type Config struct {
 
 var awaitingInput = make(map[int64]string)
 var userSettings = make(map[int64]UserSettings)
+var messageBuffers = make(map[int64]*bytes.Buffer)
 
 type UserSettings struct {
 	Token  string
@@ -44,7 +46,6 @@ func main() {
 	}
 
 	bot.Debug = true
-
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
 	u := tgbotapi.NewUpdate(0)
@@ -66,25 +67,47 @@ func main() {
 		chatID := update.Message.Chat.ID
 
 		if update.Message.IsCommand() {
+			if update.Message.Command() == "send" {
+				handleSendCommand(chatID, bot)
+				continue
+			}
+
 			handleCommand(update.Message, bot)
 		} else if inputType, ok := awaitingInput[chatID]; ok {
 			handleUserInput(chatID, inputType, update.Message.Text)
-			delete(awaitingInput, chatID)
-			msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("%s set successfully.", inputType))
-			bot.Send(msg)
 		} else {
-			if settings, ok := userSettings[chatID]; ok && settings.Token != "" && settings.Domain != "" {
-				err := postToMastodon(settings.Domain, settings.Token, update.Message.Text)
-				if err != nil {
-					bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("Error posting to Mastodon: %v", err)))
-				} else {
-					bot.Send(tgbotapi.NewMessage(chatID, "Message posted to Mastodon."))
-				}
-			} else {
-				defaultResponse(chatID, bot)
-			}
+			bufferMessage(chatID, update.Message.Text)
 		}
 	}
+}
+
+func handleSendCommand(chatID int64, bot *tgbotapi.BotAPI) {
+	if settings, ok := userSettings[chatID]; ok && settings.Token != "" && settings.Domain != "" {
+		if buffer, ok := messageBuffers[chatID]; ok && buffer.Len() > 0 {
+			err := postToMastodon(settings.Domain, settings.Token, buffer.String())
+			if err != nil {
+				bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("Error posting to Mastodon: %v", err)))
+			} else {
+				bot.Send(tgbotapi.NewMessage(chatID, "Messages posted to Mastodon."))
+			}
+			buffer.Reset()
+		} else {
+			bot.Send(tgbotapi.NewMessage(chatID, "No messages to post."))
+		}
+	} else {
+		bot.Send(tgbotapi.NewMessage(chatID, "Mastodon token or domain not set."))
+	}
+}
+
+func bufferMessage(chatID int64, message string) {
+	if _, ok := messageBuffers[chatID]; !ok {
+		messageBuffers[chatID] = new(bytes.Buffer)
+	}
+	buffer := messageBuffers[chatID]
+	if buffer.Len() > 0 {
+		buffer.WriteString("\n\n") // Zwei Zeilen zwischen den Nachrichten.
+	}
+	buffer.WriteString(message)
 }
 
 func handleCommand(message *tgbotapi.Message, bot *tgbotapi.BotAPI) {
