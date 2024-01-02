@@ -105,7 +105,7 @@ func bufferMessage(chatID int64, message string) {
 	}
 	buffer := messageBuffers[chatID]
 	if buffer.Len() > 0 {
-		buffer.WriteString("\n\n") // Zwei Zeilen zwischen den Nachrichten.
+		buffer.WriteString("\n\n")
 	}
 	buffer.WriteString(message)
 }
@@ -173,7 +173,7 @@ func postToMastodon(domain, token, content string) error {
 
 func saveToFile(filename string, userID int64, data string) {
 	filePath := filename
-	content, err := ioutil.ReadFile(filePath)
+	content, err := os.ReadFile(filePath)
 	if err != nil && !os.IsNotExist(err) {
 		log.Fatal(err)
 	}
