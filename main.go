@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -289,12 +290,85 @@ func handleCommand(message *tgbotapi.Message, bot *tgbotapi.BotAPI) {
 	case "domain":
 		awaitingInput[chatID] = "domain"
 		bot.Send(tgbotapi.NewMessage(chatID, "Please send your Mastodon instance domain."))
+	case "list":
+		handleListCommand(chatID, bot)
+	case "count":
+		handleCountCommand(chatID, bot)
 	case "help":
-		commands := "Commands:\n/token - Set your Mastodon access token\n/domain - Set your Mastodon instance domain\n/help - Show this help message"
+		commands := `Commands:
+		/token - Set your Mastodon access token
+		/domain - Set your Mastodon instance domain
+		/list - List all outstanding posts
+		/count - Count all outstanding posts
+		/help - Show this help message`
 		bot.Send(tgbotapi.NewMessage(chatID, commands))
 	default:
 		bot.Send(tgbotapi.NewMessage(chatID, "I don't know that command"))
 	}
+}
+
+func handleCountCommand(chatID int64, bot *tgbotapi.BotAPI) {
+	dirPath := fmt.Sprintf("posts/%d", chatID)
+	files, err := ioutil.ReadDir(dirPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			bot.Send(tgbotapi.NewMessage(chatID, "No outstanding posts."))
+		} else {
+			bot.Send(tgbotapi.NewMessage(chatID, "Error reading post directory."))
+		}
+		return
+	}
+
+	count := len(files)
+	if count == 0 {
+		bot.Send(tgbotapi.NewMessage(chatID, "No outstanding posts."))
+	} else {
+		bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("You have %d outstanding post(s).", count)))
+	}
+}
+
+func handleListCommand(chatID int64, bot *tgbotapi.BotAPI) {
+	dirPath := fmt.Sprintf("posts/%d", chatID)
+	files, err := ioutil.ReadDir(dirPath)
+	if err != nil {
+		bot.Send(tgbotapi.NewMessage(chatID, "Error reading post directory."))
+		return
+	}
+	if len(files) == 0 {
+		bot.Send(tgbotapi.NewMessage(chatID, "No outstanding posts."))
+		return
+	}
+
+	// Sort files by modification time in ascending order (oldest first)
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].ModTime().Before(files[j].ModTime())
+	})
+
+	var response strings.Builder
+	response.WriteString("List of outstanding posts:\n")
+	for _, file := range files {
+		filePath := filepath.Join(dirPath, file.Name())
+		content, err := ioutil.ReadFile(filePath)
+		if err != nil {
+			log.Printf("Error reading file %s: %v", filePath, err)
+			continue
+		}
+
+		formattedTime := file.ModTime().Format("Mon, 02 Jan 2006 15:04:05 MST")
+		response.WriteString(fmt.Sprintf("\n------------\n*Post Time: %s*\n\n%s\n", formattedTime, string(content)))
+		// Check if the message is getting too long
+		if response.Len() > 4000 { // Telegram's limit is 4096 characters
+			break
+		}
+	}
+
+	if response.Len() == 0 {
+		response.WriteString("Error reading post contents.")
+	}
+
+	msg := tgbotapi.NewMessage(chatID, response.String())
+	msg.ParseMode = tgbotapi.ModeMarkdown
+	bot.Send(msg)
 }
 
 func handleUserInput(chatID int64, inputType, input string) {
