@@ -64,7 +64,7 @@ func main() {
 	loadUserSettingsFromFile("tokens.txt", "token")
 	loadUserSettingsFromFile("domains.txt", "domain")
 
-	checkTicker := time.NewTicker(10 * time.Second)
+	checkTicker := time.NewTicker(5 * time.Minute)
 	go func() {
 		for range checkTicker.C {
 			checkAndSendOldestPosts(bot)
@@ -114,7 +114,7 @@ func shouldSendPost(settings UserSettings) bool {
 }
 
 func getLastPostTime(domain, token string) (time.Time, error) {
-	userID, err := getUserID(domain, token) // You'll need to implement this function
+	userID, err := getUserID(domain, token)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("error getting user ID: %w", err)
 	}
@@ -145,7 +145,6 @@ func getLastPostTime(domain, token string) (time.Time, error) {
 	}
 
 	for _, post := range posts {
-		fmt.Printf("Post: %v\n", post)
 		if inReplyToID, exists := post["in_reply_to_id"]; (!exists || inReplyToID == nil) && (post["reblog"] == false || post["reblog"] == nil) {
 			createdAt, ok := post["created_at"].(string)
 			if !ok {
