@@ -64,7 +64,7 @@ func main() {
 	loadUserSettingsFromFile("tokens.txt", "token")
 	loadUserSettingsFromFile("domains.txt", "domain")
 
-	checkTicker := time.NewTicker(5 * time.Minute)
+	checkTicker := time.NewTicker(10 * time.Second)
 	go func() {
 		for range checkTicker.C {
 			checkAndSendOldestPosts(bot)
@@ -145,7 +145,8 @@ func getLastPostTime(domain, token string) (time.Time, error) {
 	}
 
 	for _, post := range posts {
-		if inReplyToID, exists := post["in_reply_to_id"]; !exists || inReplyToID == nil {
+		fmt.Printf("Post: %v\n", post)
+		if inReplyToID, exists := post["in_reply_to_id"]; (!exists || inReplyToID == nil) && (post["reblog"] == false || post["reblog"] == nil) {
 			createdAt, ok := post["created_at"].(string)
 			if !ok {
 				continue
