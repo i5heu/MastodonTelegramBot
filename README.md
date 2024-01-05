@@ -16,3 +16,13 @@ token - Set your Mastodon access token
 domain - Set your Mastodon instance domain
 help - Show this help message
 ```
+
+## TODO 
+
+- [ ] refactor with multiple accounts per telegram user in mind
+- [ ] add image support
+- [ ] add CW support
+  - [ ] add auto CW support with LLM
+- [ ] add twitter support
+- [ ] add LLM gramar fixer OpenAI
+- [ ] add auto account selector with LLM
